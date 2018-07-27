@@ -80,6 +80,7 @@ import java.security.cert.PKIXBuilderParameters;
 import java.security.cert.X509CRL;
 import java.security.cert.X509CertSelector;
 import java.security.cert.X509Certificate;
+import java.security.*;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Date;
@@ -95,6 +96,10 @@ public class SSLUtils {
      * The default key length to use when generating a keypair.
      */
     public static final int DEFAULT_KEY_LENGTH = 4096;
+
+    static {
+        Security.addProvider(new BouncyCastleProvider());
+    }
 
     /**
      * Create new public & private keys with length 4096.
@@ -121,7 +126,8 @@ public class SSLUtils {
     public static KeyPair generateKeyPair(int keyLength)
         throws NoSuchProviderException, NoSuchAlgorithmException
     {
-        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider.PROVIDER_NAME);
+        //KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
         keyGen.initialize(keyLength);
         return keyGen.generateKeyPair();
     }
@@ -173,6 +179,7 @@ public class SSLUtils {
 
         return requestBuilder.build(
                 new JcaContentSignerBuilder("SHA1withRSA").
+                        setProvider(BouncyCastleProvider.PROVIDER_NAME).
                         build(keyPair.getPrivate()));
     }
 
@@ -233,12 +240,28 @@ public class SSLUtils {
         AlgorithmIdentifier digAlgId =
                 new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
 
+ /*
+ *  
+
+        JcaContentSignerBuilder signerBuilder = new JcaContentSignerBuilder("SHA256WithRSA");
+        signerBuilder.setProvider(BouncyCastleProvider.PROVIDER_NAME);
+        ContentSigner signer = signerBuilder.build(issuerPrivateKey);
+
+        X509CertificateHolder holder = builder.build(signer);
+        JcaX509CertificateConverter converter = new JcaX509CertificateConverter();
+        converter.setProvider(BouncyCastleProvider.PROVIDER_NAME);
+        return converter.getCertificate(holder);
+
+*/
+        // For time being we will not the Provider to BouncyCastle on the signerBuilder below
+        // since it seems to be already part of BcRSAContentSignerBuilder
         ContentSigner signer =
                 new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(
                         PrivateKeyFactory.createKey(issuerPrivateKey.getEncoded()));
 
 
         JcaX509CertificateConverter converter = new JcaX509CertificateConverter();
+        converter.setProvider(BouncyCastleProvider.PROVIDER_NAME);
 
         return converter.getCertificate(certBuilder.build(signer));
     }
@@ -275,8 +298,8 @@ public class SSLUtils {
                              new JcaX509ExtensionUtils().createAuthorityKeyIdentifier(issuerPublicKey));
         builder.addExtension(Extension.cRLNumber, false, new CRLNumber(BigInteger.ZERO));
         ContentSigner signer =
-            new JcaContentSignerBuilder("SHA256withRSA").build(issuerPrivateKey);
-        return new JcaX509CRLConverter().getCRL(builder.build(signer));
+            new JcaContentSignerBuilder("SHA256withRSA").setProvider(BouncyCastleProvider.PROVIDER_NAME).build(issuerPrivateKey);
+        return new JcaX509CRLConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME).getCRL(builder.build(signer));
     }
 
     /**
@@ -354,8 +377,8 @@ public class SSLUtils {
                              new JcaX509ExtensionUtils().createAuthorityKeyIdentifier(issuerPublicKey));
 
         ContentSigner signer =
-            new JcaContentSignerBuilder("SHA256withRSA").build(issuerPrivateKey);
-        return new JcaX509CRLConverter().getCRL(builder.build(signer));
+            new JcaContentSignerBuilder("SHA256withRSA").setProvider(new BouncyCastleProvider()).build(issuerPrivateKey);
+        return new JcaX509CRLConverter().setProvider(new BouncyCastleProvider()).getCRL(builder.build(signer));
     }
 
     /**
